@@ -3,33 +3,34 @@
   info: Principle Investigator
   department: 
   link: bonnen
-
-- name: Aleks Marijan
-  photo: aleks-marijan.jpg
-  info: O.D. Student Researcher
-  department: School of Optometry
-
+  
 - name: Amy Nguyen
   photo: amy-nguyen.jpg
-  info: Optometry Student
+  info: Optometry Student, Dean's Scholar (2022)
   department: School of Optometry
-
-- name: Kaitlyn Young
-  photo: kaitlyn-young.jpg
-  info: Undergraduate Research Assistant
-  department: Microbiology, Clarinet Performance
-
-- name: Rachel Allison
-  photo: rachel-allison.jpg
-  info: High School Research Assistant
-  department: Bloomington High School North
 
 - name: Zachary Petroff
   photo: zach-petroff.jpg
-  info: Masters Student -- FADS program
+  info: Research Technician
   department: Data Science, Luddy School
+  link: https://github.com/ZachPetroff
+
+- name: Jennifer Johnson
+  photo: jen-johnson.jpg
+  info: Undergraduate Research Assistant
+  department: Neuroscience
+
+- name: Adanna Onwukanjo
+  photo: adanna-onwukanjo.jpg
+  info: Optometry Student, Dean's Scholar (2023)
+  department: School of Optometry
+
+- name: Ziggy Waller
+  photo: ziggy-waller.jpg
+  info: Masters Student, Neuroengineering
+  department: Luddy School of Informatics, Computing & Engineering 
 
 - name: Bita Manouchehri
   photo: Bita-Manouchehri.jpg
-  info: student
+  info: Rotation Student
   department: School of Optometry
