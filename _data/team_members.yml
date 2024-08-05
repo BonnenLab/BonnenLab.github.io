@@ -11,8 +11,8 @@
 
 - name: Zachary Petroff
   photo: zach-petroff.jpg
-  info: Research Technician
-  department: MS in Data Science, Luddy School of Informatics, Computing & Engineering
+  info: Phd Student - Computer Science / Cognitive Science
+  department: co-advised with David Crandall, Rowan Candy
   link: https://github.com/ZachPetroff
 
 - name: Jennifer Johnson
@@ -32,5 +32,5 @@
 
 - name: Bita Manouchehri
   photo: Bita-Manouchehri.jpg
-  info: Rotation Student
+  info: PhD Student - Vision Science
   department: School of Optometry
