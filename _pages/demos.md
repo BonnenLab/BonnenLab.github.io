@@ -3,7 +3,7 @@ title: "Demos"
 layout: default
 excerpt: "Interactive demos for neuroscience courses."
 sitemap: false
-permalink: /demos/
+permalink: /demos.html
 ---
 
 <div class="col-sm-12">
