@@ -10,7 +10,7 @@ permalink: /demos/
 
 <h2>Interactive demos</h2>
 <p>
-These interactive widgets are designed for use in introductory neuroscience courses.
+These interactive widgets are designed for use in my courses.
 Each one illustrates a core concept you can explore by adjusting parameters in real time.
 </p>
 
