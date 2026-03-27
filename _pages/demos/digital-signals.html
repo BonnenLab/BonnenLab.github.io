@@ -1,0 +1,224 @@
+---
+title: "Digital vs Analog Signals Demo"
+layout: default
+excerpt: "Interactive demo showing why digital (all-or-nothing) signals resist noise better than analog (graded) signals."
+sitemap: false
+permalink: /demos/digital-signals/
+---
+
+<div class="col-sm-12">
+
+<p style="margin-bottom: 4px;"><a href="/demos/">&larr; All demos</a></p>
+<h2>Why digital signals resist noise</h2>
+<p>
+This interactive demo shows how digital (all-or-nothing) signaling — like action potentials —
+resists noise accumulation compared to analog (graded) signals. Each relay station adds random noise.
+The analog signal accumulates distortion at every step, while the digital signal is regenerated
+(compared against a threshold and restored to 0 or 1), discarding noise at each relay.
+</p>
+
+<div id="signal-demo" style="max-width: 800px;">
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; align-items: end;">
+  <div style="flex: 1; min-width: 140px;">
+    <label style="display: block; font-size: 13px; color: #888; margin-bottom: 4px;">
+      Noise level: <span style="font-weight: 600;" id="noise-val">30%</span>
+    </label>
+    <input type="range" min="0" max="80" value="30" step="1" id="noise" style="width: 100%;">
+  </div>
+  <div style="flex: 1; min-width: 140px;">
+    <label style="display: block; font-size: 13px; color: #888; margin-bottom: 4px;">
+      Relay stations: <span style="font-weight: 600;" id="relays-val">4</span>
+    </label>
+    <input type="range" min="1" max="8" value="4" step="1" id="relays" style="width: 100%;">
+  </div>
+  <div style="flex: 0; min-width: auto;">
+    <button class="btn btn-default btn-sm" id="new-signal">New signal</button>
+  </div>
+</div>
+
+<div class="row" style="margin-bottom: 24px;">
+  <div class="col-sm-6">
+    <h4 style="font-size: 15px;">
+      <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #D85A30;"></span>
+      Analog (graded)
+    </h4>
+    <canvas id="c-analog" height="200" style="width: 100%; border: 1px solid #ddd; border-radius: 4px; background: #fff;"></canvas>
+    <div id="labels-analog" style="display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-top: 4px;"></div>
+  </div>
+  <div class="col-sm-6">
+    <h4 style="font-size: 15px;">
+      <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #1D9E75;"></span>
+      Digital (all-or-nothing)
+    </h4>
+    <canvas id="c-digital" height="200" style="width: 100%; border: 1px solid #ddd; border-radius: 4px; background: #fff;"></canvas>
+    <div id="labels-digital" style="display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-top: 4px;"></div>
+  </div>
+</div>
+
+<div class="row" style="margin-bottom: 16px;">
+  <div class="col-sm-6">
+    <div style="background: #f5f5f5; border-radius: 6px; padding: 12px 16px; text-align: center;">
+      <div style="font-size: 13px; color: #888;">Analog error</div>
+      <div style="font-size: 22px; font-weight: 600; color: #D85A30; margin-top: 4px;" id="err-a">0%</div>
+    </div>
+  </div>
+  <div class="col-sm-6">
+    <div style="background: #f5f5f5; border-radius: 6px; padding: 12px 16px; text-align: center;">
+      <div style="font-size: 13px; color: #888;">Digital error</div>
+      <div style="font-size: 22px; font-weight: 600; color: #1D9E75; margin-top: 4px;" id="err-d">0%</div>
+    </div>
+  </div>
+</div>
+
+<div class="well" style="font-size: 13px; line-height: 1.6;">
+  <strong>How it works:</strong> The error is the mean absolute difference between the original
+  and final signal. For the digital side, since values are strictly 0 or 1, the percentage
+  reflects the fraction of bits that were corrupted. With extreme noise, both errors converge
+  toward 50% — the point where the signal is indistinguishable from random noise. This is
+  essentially why neurons use action potentials (fixed-amplitude spikes) rather than graded
+  voltage changes for long-distance communication.
+</div>
+
+</div>
+
+</div>
+
+<script>
+(function() {
+  var SAMPLES = 32;
+  var cA = document.getElementById('c-analog');
+  var cD = document.getElementById('c-digital');
+  var noiseSlider = document.getElementById('noise');
+  var relaysSlider = document.getElementById('relays');
+  var noiseVal = document.getElementById('noise-val');
+  var relaysVal = document.getElementById('relays-val');
+  var originalSignal = [];
+
+  function generateSignal() {
+    originalSignal = [];
+    for (var i = 0; i < SAMPLES; i++) {
+      originalSignal.push(Math.random() > 0.5 ? 1 : 0);
+    }
+    draw();
+  }
+
+  function addNoise(signal, noiseLevel) {
+    return signal.map(function(v) {
+      var n = (Math.random() - 0.5) * 2 * noiseLevel;
+      return Math.max(0, Math.min(1, v + n));
+    });
+  }
+
+  function threshold(signal) {
+    return signal.map(function(v) { return v >= 0.5 ? 1 : 0; });
+  }
+
+  function computeStages(numRelays, noiseLevel) {
+    var analogStages = [originalSignal.slice()];
+    var digitalStages = [originalSignal.slice()];
+    for (var r = 0; r < numRelays; r++) {
+      var lastA = analogStages[analogStages.length - 1];
+      analogStages.push(addNoise(lastA, noiseLevel));
+      var lastD = digitalStages[digitalStages.length - 1];
+      var noisyD = addNoise(lastD, noiseLevel);
+      digitalStages.push(threshold(noisyD));
+    }
+    return { analogStages: analogStages, digitalStages: digitalStages };
+  }
+
+  function drawSignal(canvas, stages, color, colorFaded) {
+    var ctx = canvas.getContext('2d');
+    var dpr = window.devicePixelRatio || 1;
+    var w = canvas.clientWidth;
+    var h = canvas.clientHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    var numStages = stages.length;
+    var stageW = w / numStages;
+    var pad = 16;
+    var signalH = h - pad * 2;
+
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 0.5;
+    for (var i = 1; i < numStages; i++) {
+      var x = Math.round(i * stageW);
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+
+    var midY = pad + signalH * 0.5;
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 0.5;
+    for (var s = 0; s < numStages; s++) {
+      var sx = s * stageW;
+      ctx.beginPath(); ctx.moveTo(sx + 4, midY); ctx.lineTo(sx + stageW - 4, midY); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    for (var s = 0; s < numStages; s++) {
+      var sig = stages[s];
+      var sx = s * stageW;
+      var stepW = (stageW - 8) / SAMPLES;
+      var isFirst = s === 0;
+      var isLast = s === numStages - 1;
+
+      ctx.strokeStyle = isLast ? color : (isFirst ? color : colorFaded);
+      ctx.lineWidth = isLast ? 2.5 : (isFirst ? 2 : 1.5);
+      ctx.beginPath();
+      for (var i = 0; i < SAMPLES; i++) {
+        var x = sx + 4 + i * stepW;
+        var y = pad + signalH * (1 - sig[i]);
+        if (i === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          var prevY = pad + signalH * (1 - sig[i - 1]);
+          ctx.lineTo(x, prevY);
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.lineTo(sx + stageW - 4, pad + signalH * (1 - sig[SAMPLES - 1]));
+      ctx.stroke();
+    }
+  }
+
+  function computeError(original, final) {
+    var totalErr = 0;
+    for (var i = 0; i < original.length; i++) {
+      totalErr += Math.abs(original[i] - final[i]);
+    }
+    return totalErr / original.length;
+  }
+
+  function draw() {
+    var noiseLevel = parseInt(noiseSlider.value) / 100;
+    var numRelays = parseInt(relaysSlider.value);
+    noiseVal.textContent = Math.round(noiseLevel * 100) + '%';
+    relaysVal.textContent = numRelays;
+
+    var result = computeStages(numRelays, noiseLevel);
+
+    drawSignal(cA, result.analogStages, '#D85A30', 'rgba(216,90,48,0.35)');
+    drawSignal(cD, result.digitalStages, '#1D9E75', 'rgba(29,158,117,0.35)');
+
+    var labels = ['Origin'];
+    for (var i = 1; i <= numRelays; i++) labels.push('Relay ' + i);
+    document.getElementById('labels-analog').innerHTML = labels.map(function(l) { return '<span>' + l + '</span>'; }).join('');
+    document.getElementById('labels-digital').innerHTML = labels.map(function(l) { return '<span>' + l + '</span>'; }).join('');
+
+    var errA = computeError(originalSignal, result.analogStages[result.analogStages.length - 1]);
+    var errD = computeError(originalSignal, result.digitalStages[result.digitalStages.length - 1]);
+    document.getElementById('err-a').textContent = Math.round(errA * 100) + '%';
+    document.getElementById('err-d').textContent = Math.round(errD * 100) + '%';
+  }
+
+  noiseSlider.addEventListener('input', draw);
+  relaysSlider.addEventListener('input', draw);
+  document.getElementById('new-signal').addEventListener('click', generateSignal);
+
+  generateSignal();
+})();
+</script>
