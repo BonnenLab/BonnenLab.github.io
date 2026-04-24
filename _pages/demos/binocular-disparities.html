@@ -1,0 +1,241 @@
+---
+title: "Binocular Disparities Demo"
+layout: default
+excerpt: "Interactive demo explaining binocular disparities"
+sitemap: false
+permalink: /demos/binocular-disparities/
+---
+
+
+<h2 class="sr-only">Interactive binocular disparity diagram with retinal ray projections</h2>
+
+<div style="display:flex; justify-content:center; gap:16px; margin-bottom:10px; flex-wrap:wrap;">
+  <div style="display:flex;align-items:center;gap:5px;">
+    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#7F77DD;"></span>
+    <span style="font-size:13px;color:var(--color-text-secondary);">Fixation</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:5px;">
+    <span style="display:inline-block;width:10px;height:10px;background:#1D9E75;"></span>
+    <span style="font-size:13px;color:var(--color-text-secondary);">Object</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:5px;">
+    <span style="display:inline-block;width:20px;border-top:1.5px dashed rgba(136,135,128,0.5);"></span>
+    <span style="font-size:13px;color:var(--color-text-secondary);">Horopter</span>
+  </div>
+</div>
+
+<div style="display:flex; justify-content:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+  <button onclick="setPreset('horopter')" style="font-size:12px;padding:4px 12px;">On horopter</button>
+  <button onclick="setPreset('nearer')" style="font-size:12px;padding:4px 12px;">Nearer (crossed)</button>
+  <button onclick="setPreset('farther')" style="font-size:12px;padding:4px 12px;">Farther (uncrossed)</button>
+</div>
+
+<div id="status" style="text-align:center;margin-bottom:8px;padding:6px 16px;border-radius:var(--border-radius-md);background:var(--color-background-secondary);font-size:14px;font-weight:500;color:var(--color-text-primary);"></div>
+
+<canvas id="cv" width="680" height="440" style="width:100%;border-radius:var(--border-radius-lg);cursor:grab;touch-action:none;"></canvas>
+
+<div style="position:relative;width:100%;height:52px;margin-top:6px;">
+  <div style="position:absolute;left:42.6%;transform:translateX(-50%);text-align:center;">
+    <div style="font-size:12px;color:var(--color-text-secondary);">&theta;<sub>L</sub></div>
+    <div style="font-size:17px;font-weight:500;" id="al">0.0°</div>
+  </div>
+  <div style="position:absolute;left:57.4%;transform:translateX(-50%);text-align:center;">
+    <div style="font-size:12px;color:var(--color-text-secondary);">&theta;<sub>R</sub></div>
+    <div style="font-size:17px;font-weight:500;" id="ar">0.0°</div>
+  </div>
+</div>
+
+<div style="text-align:center;margin-top:2px;">
+  <div style="display:inline-block;padding:4px 16px;border-radius:var(--border-radius-md);background:var(--color-background-secondary);">
+    <div style="font-size:12px;color:var(--color-text-secondary);">Disparity (&theta;<sub>R</sub> &minus; &theta;<sub>L</sub>)</div>
+    <div style="font-size:17px;font-weight:500;" id="dv">0.0°</div>
+  </div>
+</div>
+
+<p style="text-align:center;font-size:12px;color:var(--color-text-tertiary);margin-top:8px;">Drag the fixation point or object to explore. &theta; is positive rightward, negative leftward.</p>
+
+<script>
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const dpr=window.devicePixelRatio||1;
+cv.width=680*dpr;cv.height=440*dpr;ctx.scale(dpr,dpr);
+const W=680,H=440;
+const LE={x:290,y:390},RE={x:390,y:390},eyeR=28;
+let fix={x:340,y:90},obj={x:310,y:240};
+let dragging=null,hover=null;
+
+const isDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;
+const txtCol=isDark?'#D3D1C7':'#444441';
+const txtSub=isDark?'#B4B2A9':'#888780';
+const bgEye=isDark?'#2C2C2A':'#FFFFFF';
+const eyeStroke=isDark?'#B4B2A9':'#444441';
+const fixCol=isDark?'#AFA9EC':'#7F77DD';
+const fixColD=isDark?'#CECBF6':'#534AB7';
+const objCol=isDark?'#5DCAA5':'#1D9E75';
+const objColD=isDark?'#9FE1CB':'#0F6E56';
+const fixLine=isDark?'rgba(175,169,236,0.55)':'rgba(127,119,221,0.55)';
+const objLine=isDark?'rgba(93,202,165,0.55)':'rgba(29,158,117,0.55)';
+
+function circumcircle(p1,p2,p3){
+  const ax=p1.x,ay=p1.y,bx=p2.x,by=p2.y,cx=p3.x,cy=p3.y;
+  const D=2*(ax*(by-cy)+bx*(cy-ay)+cx*(ay-by));
+  if(Math.abs(D)<0.01)return null;
+  const a2=ax*ax+ay*ay,b2=bx*bx+by*by,c2=cx*cx+cy*cy;
+  const ux=(a2*(by-cy)+b2*(cy-ay)+c2*(ay-by))/D;
+  const uy=(a2*(cx-bx)+b2*(ax-cx)+c2*(bx-ax))/D;
+  return{x:ux,y:uy,r:Math.sqrt((ax-ux)**2+(ay-uy)**2)};
+}
+
+function thetaFromUp(eye,pt){return Math.atan2(pt.x-eye.x,eye.y-pt.y);}
+
+function ptOnCircle(cx,cy,r,tx,ty){
+  const a=Math.atan2(ty-cy,tx-cx);
+  return{x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)};
+}
+
+function drawAngleArc(eye,fixPt,objPt,color){
+  const aFix=Math.atan2(fixPt.y-eye.y,fixPt.x-eye.x);
+  const aObj=Math.atan2(objPt.y-eye.y,objPt.x-eye.x);
+  let diff=aObj-aFix;
+  while(diff>Math.PI)diff-=2*Math.PI;
+  while(diff<-Math.PI)diff+=2*Math.PI;
+  const r=46;
+  ctx.beginPath();
+  if(diff>0)ctx.arc(eye.x,eye.y,r,aFix,aFix+diff);
+  else ctx.arc(eye.x,eye.y,r,aFix+diff,aFix);
+  ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();
+  const mid=aFix+diff/2;
+  const lr=r+15;
+  let normT=thetaFromUp(eye,objPt)-thetaFromUp(eye,fixPt);
+  while(normT>Math.PI)normT-=2*Math.PI;
+  while(normT<-Math.PI)normT+=2*Math.PI;
+  const deg=normT*180/Math.PI;
+  ctx.font='500 11px sans-serif';ctx.fillStyle=color;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText((deg>=0?'+':'')+deg.toFixed(1)+'°',eye.x+lr*Math.cos(mid),eye.y+lr*Math.sin(mid));
+}
+
+function drawEye(ex,ey,label){
+  const entryFix=ptOnCircle(ex,ey,eyeR,fix.x,fix.y);
+  const entryObj=ptOnCircle(ex,ey,eyeR,obj.x,obj.y);
+  const retFixA=Math.atan2(ey-fix.y,ex-fix.x);
+  const retFixX=ex+eyeR*0.92*Math.cos(retFixA),retFixY=ey+eyeR*0.92*Math.sin(retFixA);
+  const retObjA=Math.atan2(ey-obj.y,ex-obj.x);
+  const retObjX=ex+eyeR*0.92*Math.cos(retObjA),retObjY=ey+eyeR*0.92*Math.sin(retObjA);
+
+  ctx.beginPath();ctx.arc(ex,ey,eyeR,0,Math.PI*2);
+  ctx.fillStyle=isDark?'rgba(44,44,42,0.6)':'rgba(255,255,255,0.6)';
+  ctx.fill();ctx.strokeStyle=eyeStroke;ctx.lineWidth=1.8;ctx.stroke();
+
+  ctx.beginPath();ctx.ellipse(ex,ey-eyeR+2,10,6,0,Math.PI,0);
+  ctx.fillStyle=isDark?'rgba(100,130,180,0.25)':'rgba(200,220,255,0.45)';
+  ctx.fill();ctx.strokeStyle=eyeStroke;ctx.lineWidth=1;ctx.stroke();
+
+  ctx.save();
+  ctx.beginPath();ctx.arc(ex,ey,eyeR-1,0,Math.PI*2);ctx.clip();
+  ctx.beginPath();ctx.moveTo(entryFix.x,entryFix.y);ctx.lineTo(retFixX,retFixY);
+  ctx.strokeStyle=isDark?'#AFA9EC':'#7F77DD';ctx.lineWidth=1.8;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(entryObj.x,entryObj.y);ctx.lineTo(retObjX,retObjY);
+  ctx.strokeStyle=isDark?'#5DCAA5':'#1D9E75';ctx.lineWidth=1.8;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+  ctx.restore();
+
+  ctx.beginPath();ctx.arc(ex,ey,2.5,0,Math.PI*2);ctx.fillStyle=txtSub;ctx.fill();
+
+  ctx.beginPath();ctx.arc(retFixX,retFixY,3.5,0,Math.PI*2);
+  ctx.fillStyle=isDark?'#AFA9EC':'#CECBF6';ctx.fill();
+  ctx.strokeStyle=isDark?'#CECBF6':'#7F77DD';ctx.lineWidth=1.2;ctx.stroke();
+
+  ctx.beginPath();ctx.arc(retObjX,retObjY,3.5,0,Math.PI*2);
+  ctx.fillStyle=isDark?'#5DCAA5':'#9FE1CB';ctx.fill();
+  ctx.strokeStyle=isDark?'#9FE1CB':'#1D9E75';ctx.lineWidth=1.2;ctx.stroke();
+
+  ctx.font='500 13px sans-serif';ctx.fillStyle=txtCol;
+  ctx.textAlign='center';ctx.fillText(label,ex,ey+eyeR+18);
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  const hc=circumcircle(LE,RE,fix);
+  if(hc&&hc.r<3000){
+    ctx.beginPath();ctx.arc(hc.x,hc.y,hc.r,0,Math.PI*2);
+    ctx.setLineDash([6,4]);ctx.strokeStyle=isDark?'rgba(179,178,169,0.2)':'rgba(136,135,128,0.25)';
+    ctx.lineWidth=1.5;ctx.stroke();ctx.setLineDash([]);
+  }
+  [LE,RE].forEach(e=>{
+    const p=ptOnCircle(e.x,e.y,eyeR,fix.x,fix.y);
+    ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(fix.x,fix.y);
+    ctx.strokeStyle=fixLine;ctx.lineWidth=1.5;ctx.stroke();
+  });
+  [LE,RE].forEach(e=>{
+    const p=ptOnCircle(e.x,e.y,eyeR,obj.x,obj.y);
+    ctx.beginPath();ctx.setLineDash([6,4]);
+    ctx.moveTo(p.x,p.y);ctx.lineTo(obj.x,obj.y);
+    ctx.strokeStyle=objLine;ctx.lineWidth=1.5;ctx.stroke();ctx.setLineDash([]);
+  });
+  drawAngleArc(LE,fix,obj,fixColD);
+  drawAngleArc(RE,fix,obj,fixColD);
+  drawEye(LE.x,LE.y,'Left eye');
+  drawEye(RE.x,RE.y,'Right eye');
+
+  ctx.beginPath();ctx.arc(fix.x,fix.y,7,0,Math.PI*2);
+  ctx.fillStyle=dragging==='fix'||hover==='fix'?fixColD:fixCol;
+  ctx.fill();ctx.strokeStyle=bgEye;ctx.lineWidth=2;ctx.stroke();
+  ctx.font='500 13px sans-serif';ctx.fillStyle=fixColD;
+  ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText('Fixation',fix.x,fix.y-12);
+
+  const os=9;
+  ctx.fillStyle=dragging==='obj'||hover==='obj'?objColD:objCol;
+  ctx.fillRect(obj.x-os,obj.y-os,os*2,os*2);
+  ctx.strokeStyle=bgEye;ctx.lineWidth=2;ctx.strokeRect(obj.x-os,obj.y-os,os*2,os*2);
+  ctx.font='500 13px sans-serif';ctx.fillStyle=objColD;
+  ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText('Object',obj.x,obj.y-14);
+
+  updateInfo();
+}
+
+function updateInfo(){
+  const tFixL=thetaFromUp(LE,fix),tObjL=thetaFromUp(LE,obj);
+  const tFixR=thetaFromUp(RE,fix),tObjR=thetaFromUp(RE,obj);
+  let aL=tObjL-tFixL;while(aL>Math.PI)aL-=2*Math.PI;while(aL<-Math.PI)aL+=2*Math.PI;
+  let aR=tObjR-tFixR;while(aR>Math.PI)aR-=2*Math.PI;while(aR<-Math.PI)aR+=2*Math.PI;
+  const aLd=aL*180/Math.PI,aRd=aR*180/Math.PI,disp=aRd-aLd;
+  document.getElementById('al').textContent=(aLd>=0?'+':'')+aLd.toFixed(1)+'°';
+  document.getElementById('ar').textContent=(aRd>=0?'+':'')+aRd.toFixed(1)+'°';
+  document.getElementById('dv').textContent=(disp>=0?'+':'')+disp.toFixed(1)+'°';
+  const el=document.getElementById('status');
+  if(Math.abs(disp)<0.5){el.textContent='On horopter \u2014 zero disparity';el.style.color=txtCol;}
+  else if(disp<0){el.textContent='Crossed disparity (nearer than fixation)';el.style.color=isDark?'#F0997B':'#993C1D';}
+  else{el.textContent='Uncrossed disparity (farther than fixation)';el.style.color=isDark?'#85B7EB':'#185FA5';}
+}
+
+function getPos(e){
+  const r=cv.getBoundingClientRect();const t=e.touches?e.touches[0]:e;
+  return{x:(t.clientX-r.left)*W/r.width,y:(t.clientY-r.top)*H/r.height};
+}
+function hitTest(p){
+  if(Math.hypot(p.x-fix.x,p.y-fix.y)<18)return'fix';
+  if(Math.abs(p.x-obj.x)<18&&Math.abs(p.y-obj.y)<18)return'obj';
+  return null;
+}
+cv.addEventListener('pointerdown',e=>{
+  const p=getPos(e);dragging=hitTest(p);
+  if(dragging){cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';}
+});
+cv.addEventListener('pointermove',e=>{
+  const p=getPos(e);
+  if(dragging){const t=dragging==='fix'?fix:obj;
+    t.x=Math.max(40,Math.min(W-40,p.x));t.y=Math.max(30,Math.min(H-80,p.y));draw();
+  }else{hover=hitTest(p);cv.style.cursor=hover?'grab':'default';}
+});
+cv.addEventListener('pointerup',()=>{dragging=null;cv.style.cursor=hover?'grab':'default';});
+
+function setPreset(name){
+  const mid=(LE.x+RE.x)/2;
+  if(name==='horopter'){fix.x=mid;fix.y=90;
+    const hc=circumcircle(LE,RE,fix);
+    if(hc){const a=-Math.PI*0.65;obj.x=hc.x+hc.r*Math.cos(a);obj.y=hc.y+hc.r*Math.sin(a);}
+  }else if(name==='nearer'){fix.x=mid;fix.y=90;obj.x=mid-30;obj.y=240;}
+  else{fix.x=mid;fix.y=160;obj.x=mid+20;obj.y=50;}
+  draw();
+}
+draw();
+</script>
