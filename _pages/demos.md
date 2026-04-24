@@ -21,6 +21,14 @@ long-distance communication? See how digital signals resist noise accumulation
 across multiple relay stations.
 </p>
 </div>
+
+<div class="well" style="min-height: 120px;">
+<h4><a href="/demos/binocular-disparities/">Measuring Binocular Disparity</a></h4>
+<p style="font-size: 14px;">
+A demo to explore how to measure absolute binocular disparity of an object relative to fixation.
+</p>
+</div>
+
 </div>
 
 </div>
