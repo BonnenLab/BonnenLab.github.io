@@ -25,30 +25,30 @@ permalink: /demos/binocular-disparities/
 </div>
 
 <div style="display:flex; justify-content:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
-  <button onclick="setPreset('horopter')" style="font-size:12px;padding:4px 12px;">On horopter</button>
-  <button onclick="setPreset('nearer')" style="font-size:12px;padding:4px 12px;">Nearer (crossed)</button>
-  <button onclick="setPreset('farther')" style="font-size:12px;padding:4px 12px;">Farther (uncrossed)</button>
+  <button onclick="setPreset('horopter')" style="font-size:15px;padding:6px 16px;">On horopter</button>
+  <button onclick="setPreset('nearer')" style="font-size:15px;padding:6px 16px;">Nearer (crossed)</button>
+  <button onclick="setPreset('farther')" style="font-size:15px;padding:6px 16px;">Farther (uncrossed)</button>
 </div>
 
-<div id="status" style="text-align:center;margin-bottom:8px;padding:6px 16px;border-radius:var(--border-radius-md);background:var(--color-background-secondary);font-size:14px;font-weight:500;color:var(--color-text-primary);"></div>
+<div id="status" style="text-align:center;margin-bottom:8px;padding:6px 16px;border-radius:var(--border-radius-md);background:var(--color-background-secondary);font-size:16px;font-weight:500;color:var(--color-text-primary);"></div>
 
 <canvas id="cv" width="680" height="440" style="width:100%;border-radius:var(--border-radius-lg);cursor:grab;touch-action:none;"></canvas>
 
-<div style="position:relative;width:100%;height:52px;margin-top:6px;">
+<div style="position:relative;width:100%;height:58px;margin-top:6px;">
   <div style="position:absolute;left:42.6%;transform:translateX(-50%);text-align:center;">
-    <div style="font-size:12px;color:var(--color-text-secondary);">&theta;<sub>L</sub></div>
-    <div style="font-size:17px;font-weight:500;" id="al">0.0°</div>
+    <div style="font-size:14px;color:var(--color-text-secondary);">&theta;<sub>L</sub></div>
+    <div style="font-size:20px;font-weight:500;" id="al">0.0°</div>
   </div>
   <div style="position:absolute;left:57.4%;transform:translateX(-50%);text-align:center;">
-    <div style="font-size:12px;color:var(--color-text-secondary);">&theta;<sub>R</sub></div>
-    <div style="font-size:17px;font-weight:500;" id="ar">0.0°</div>
+    <div style="font-size:14px;color:var(--color-text-secondary);">&theta;<sub>R</sub></div>
+    <div style="font-size:20px;font-weight:500;" id="ar">0.0°</div>
   </div>
 </div>
 
 <div style="text-align:center;margin-top:2px;">
-  <div style="display:inline-block;padding:4px 16px;border-radius:var(--border-radius-md);background:var(--color-background-secondary);">
-    <div style="font-size:12px;color:var(--color-text-secondary);">Disparity (&theta;<sub>R</sub> &minus; &theta;<sub>L</sub>)</div>
-    <div style="font-size:17px;font-weight:500;" id="dv">0.0°</div>
+  <div style="display:inline-block;padding:6px 20px;border-radius:var(--border-radius-md);background:var(--color-background-secondary);">
+    <div style="font-size:14px;color:var(--color-text-secondary);">Absolute disparity (&theta;<sub>R</sub> &minus; &theta;<sub>L</sub>)</div>
+    <div style="font-size:20px;font-weight:500;" id="dv">0.0°</div>
   </div>
 </div>
 
@@ -72,8 +72,8 @@ const fixCol=isDark?'#AFA9EC':'#7F77DD';
 const fixColD=isDark?'#CECBF6':'#534AB7';
 const objCol=isDark?'#5DCAA5':'#1D9E75';
 const objColD=isDark?'#9FE1CB':'#0F6E56';
-const fixLine=isDark?'rgba(175,169,236,0.55)':'rgba(127,119,221,0.55)';
-const objLine=isDark?'rgba(93,202,165,0.55)':'rgba(29,158,117,0.55)';
+const fixLine=isDark?'rgba(175,169,236,0.8)':'rgba(127,119,221,0.8)';
+const objLine=isDark?'rgba(93,202,165,0.8)':'rgba(29,158,117,0.8)';
 
 function circumcircle(p1,p2,p3){
   const ax=p1.x,ay=p1.y,bx=p2.x,by=p2.y,cx=p3.x,cy=p3.y;
@@ -102,14 +102,14 @@ function drawAngleArc(eye,fixPt,objPt,color){
   ctx.beginPath();
   if(diff>0)ctx.arc(eye.x,eye.y,r,aFix,aFix+diff);
   else ctx.arc(eye.x,eye.y,r,aFix+diff,aFix);
-  ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();
+  ctx.strokeStyle=color;ctx.lineWidth=3;ctx.stroke();
   const mid=aFix+diff/2;
   const lr=r+15;
   let normT=thetaFromUp(eye,objPt)-thetaFromUp(eye,fixPt);
   while(normT>Math.PI)normT-=2*Math.PI;
   while(normT<-Math.PI)normT+=2*Math.PI;
   const deg=normT*180/Math.PI;
-  ctx.font='500 11px sans-serif';ctx.fillStyle=color;
+  ctx.font='500 13px sans-serif';ctx.fillStyle=color;
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText((deg>=0?'+':'')+deg.toFixed(1)+'°',eye.x+lr*Math.cos(mid),eye.y+lr*Math.sin(mid));
 }
@@ -124,7 +124,7 @@ function drawEye(ex,ey,label){
 
   ctx.beginPath();ctx.arc(ex,ey,eyeR,0,Math.PI*2);
   ctx.fillStyle=isDark?'rgba(44,44,42,0.6)':'rgba(255,255,255,0.6)';
-  ctx.fill();ctx.strokeStyle=eyeStroke;ctx.lineWidth=1.8;ctx.stroke();
+  ctx.fill();ctx.strokeStyle=eyeStroke;ctx.lineWidth=2.5;ctx.stroke();
 
   ctx.beginPath();ctx.ellipse(ex,ey-eyeR+2,10,6,0,Math.PI,0);
   ctx.fillStyle=isDark?'rgba(100,130,180,0.25)':'rgba(200,220,255,0.45)';
@@ -133,20 +133,20 @@ function drawEye(ex,ey,label){
   ctx.save();
   ctx.beginPath();ctx.arc(ex,ey,eyeR-1,0,Math.PI*2);ctx.clip();
   ctx.beginPath();ctx.moveTo(entryFix.x,entryFix.y);ctx.lineTo(retFixX,retFixY);
-  ctx.strokeStyle=isDark?'#AFA9EC':'#7F77DD';ctx.lineWidth=1.8;ctx.stroke();
+  ctx.strokeStyle=isDark?'#AFA9EC':'#7F77DD';ctx.lineWidth=2.5;ctx.stroke();
   ctx.beginPath();ctx.moveTo(entryObj.x,entryObj.y);ctx.lineTo(retObjX,retObjY);
-  ctx.strokeStyle=isDark?'#5DCAA5':'#1D9E75';ctx.lineWidth=1.8;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+  ctx.strokeStyle=isDark?'#5DCAA5':'#1D9E75';ctx.lineWidth=2.5;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
   ctx.restore();
 
   ctx.beginPath();ctx.arc(ex,ey,2.5,0,Math.PI*2);ctx.fillStyle=txtSub;ctx.fill();
 
-  ctx.beginPath();ctx.arc(retFixX,retFixY,3.5,0,Math.PI*2);
+  ctx.beginPath();ctx.arc(retFixX,retFixY,4.5,0,Math.PI*2);
   ctx.fillStyle=isDark?'#AFA9EC':'#CECBF6';ctx.fill();
-  ctx.strokeStyle=isDark?'#CECBF6':'#7F77DD';ctx.lineWidth=1.2;ctx.stroke();
+  ctx.strokeStyle=isDark?'#CECBF6':'#7F77DD';ctx.lineWidth=1.5;ctx.stroke();
 
-  ctx.beginPath();ctx.arc(retObjX,retObjY,3.5,0,Math.PI*2);
+  ctx.beginPath();ctx.arc(retObjX,retObjY,4.5,0,Math.PI*2);
   ctx.fillStyle=isDark?'#5DCAA5':'#9FE1CB';ctx.fill();
-  ctx.strokeStyle=isDark?'#9FE1CB':'#1D9E75';ctx.lineWidth=1.2;ctx.stroke();
+  ctx.strokeStyle=isDark?'#9FE1CB':'#1D9E75';ctx.lineWidth=1.5;ctx.stroke();
 
   ctx.font='500 13px sans-serif';ctx.fillStyle=txtCol;
   ctx.textAlign='center';ctx.fillText(label,ex,ey+eyeR+18);
@@ -157,19 +157,19 @@ function draw(){
   const hc=circumcircle(LE,RE,fix);
   if(hc&&hc.r<3000){
     ctx.beginPath();ctx.arc(hc.x,hc.y,hc.r,0,Math.PI*2);
-    ctx.setLineDash([6,4]);ctx.strokeStyle=isDark?'rgba(179,178,169,0.2)':'rgba(136,135,128,0.25)';
-    ctx.lineWidth=1.5;ctx.stroke();ctx.setLineDash([]);
+    ctx.setLineDash([6,4]);ctx.strokeStyle=isDark?'rgba(179,178,169,0.35)':'rgba(136,135,128,0.4)';
+    ctx.lineWidth=2.5;ctx.stroke();ctx.setLineDash([]);
   }
   [LE,RE].forEach(e=>{
     const p=ptOnCircle(e.x,e.y,eyeR,fix.x,fix.y);
     ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(fix.x,fix.y);
-    ctx.strokeStyle=fixLine;ctx.lineWidth=1.5;ctx.stroke();
+    ctx.strokeStyle=fixLine;ctx.lineWidth=2.5;ctx.stroke();
   });
   [LE,RE].forEach(e=>{
     const p=ptOnCircle(e.x,e.y,eyeR,obj.x,obj.y);
     ctx.beginPath();ctx.setLineDash([6,4]);
     ctx.moveTo(p.x,p.y);ctx.lineTo(obj.x,obj.y);
-    ctx.strokeStyle=objLine;ctx.lineWidth=1.5;ctx.stroke();ctx.setLineDash([]);
+    ctx.strokeStyle=objLine;ctx.lineWidth=2.5;ctx.stroke();ctx.setLineDash([]);
   });
   drawAngleArc(LE,fix,obj,fixColD);
   drawAngleArc(RE,fix,obj,fixColD);

@@ -1,0 +1,354 @@
+---
+title: "Disparity Extent Demo"
+layout: default
+excerpt: "Interactive demo showing how disparity varies along an extended object in depth"
+sitemap: false
+permalink: /demos/disparity-extent/
+---
+
+
+<h2 class="sr-only">Interactive disparity extent diagram with a draggable line in depth</h2>
+
+<div style="display:flex; justify-content:center; gap:14px; margin-bottom:10px; flex-wrap:wrap;">
+  <div style="display:flex;align-items:center;gap:5px;">
+    <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#7F77DD;"></span>
+    <span style="font-size:13px;color:var(--color-text-secondary);">Fixation</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:5px;">
+    <span style="display:inline-block;width:16px;height:4px;background:linear-gradient(to right,#1D9E75,#378ADD);"></span>
+    <span style="font-size:13px;color:var(--color-text-secondary);">Object (near &rarr; far)</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:5px;">
+    <span style="display:inline-block;width:20px;border-top:1.5px dashed rgba(136,135,128,0.5);"></span>
+    <span style="font-size:13px;color:var(--color-text-secondary);">Horopter</span>
+  </div>
+</div>
+
+<div style="display:flex; justify-content:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+  <button onclick="setPreset('close')" style="font-size:15px;padding:6px 16px;">Close to observer</button>
+  <button onclick="setPreset('far')" style="font-size:15px;padding:6px 16px;">Far from observer</button>
+  <button onclick="setPreset('cross')" style="font-size:15px;padding:6px 16px;">Crossing horopter</button>
+</div>
+
+<div id="status" style="text-align:center;margin-bottom:8px;padding:6px 16px;border-radius:var(--border-radius-md);background:var(--color-background-secondary);font-size:16px;font-weight:500;color:var(--color-text-primary);"></div>
+
+<canvas id="cv" width="680" height="440" style="width:100%;border-radius:var(--border-radius-lg);cursor:grab;touch-action:none;"></canvas>
+
+<div style="display:flex; justify-content:center; align-items:center; gap:12px; margin-top:10px;">
+  <label style="font-size:15px;color:var(--color-text-secondary);">Line length</label>
+  <input type="range" min="30" max="260" value="140" id="lenSlider" style="flex:0 1 220px;" oninput="lineLength=+this.value;draw();" />
+</div>
+
+<div style="position:relative;width:100%;margin-top:12px;">
+  <div style="position:relative;height:20px;">
+    <div style="position:absolute;left:38%;transform:translateX(-50%);font-size:13px;color:var(--color-text-secondary);">&theta;<sub>L</sub></div>
+    <div style="position:absolute;left:54%;transform:translateX(-50%);font-size:13px;color:var(--color-text-secondary);">&theta;<sub>R</sub></div>
+    <div style="position:absolute;right:0;width:130px;text-align:center;font-size:13px;color:var(--color-text-secondary);">Absolute disparity</div>
+  </div>
+  <div style="position:relative;height:32px;display:flex;align-items:center;">
+    <div style="display:flex;align-items:center;gap:4px;">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#1D9E75;flex-shrink:0;"></span>
+      <span style="font-size:14px;color:var(--color-text-secondary);white-space:nowrap;">Near end</span>
+    </div>
+    <div id="alN" style="position:absolute;left:38%;transform:translateX(-50%);font-size:20px;font-weight:500;">0.0°</div>
+    <div id="arN" style="position:absolute;left:54%;transform:translateX(-50%);font-size:20px;font-weight:500;">0.0°</div>
+    <div id="dN" style="position:absolute;right:0;width:130px;text-align:center;font-size:20px;font-weight:500;">0.0°</div>
+  </div>
+  <div style="position:relative;height:32px;display:flex;align-items:center;">
+    <div style="display:flex;align-items:center;gap:4px;">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#378ADD;flex-shrink:0;"></span>
+      <span style="font-size:14px;color:var(--color-text-secondary);white-space:nowrap;">Far end</span>
+    </div>
+    <div id="alF" style="position:absolute;left:38%;transform:translateX(-50%);font-size:20px;font-weight:500;">0.0°</div>
+    <div id="arF" style="position:absolute;left:54%;transform:translateX(-50%);font-size:20px;font-weight:500;">0.0°</div>
+    <div id="dF" style="position:absolute;right:0;width:130px;text-align:center;font-size:20px;font-weight:500;">0.0°</div>
+  </div>
+</div>
+
+<div style="text-align:center;margin-top:10px;">
+  <div style="display:inline-block;padding:6px 20px;border-radius:var(--border-radius-md);background:var(--color-background-secondary);">
+    <div style="font-size:14px;color:var(--color-text-secondary);">Disparity extent (far &minus; near)</div>
+    <div style="font-size:20px;font-weight:500;" id="de">0.0°</div>
+  </div>
+</div>
+
+<p style="text-align:center;font-size:12px;color:var(--color-text-tertiary);margin-top:8px;">Drag fixation or the line center. Use the slider to change the object's depth extent.</p>
+
+<script>
+const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+const dpr=window.devicePixelRatio||1;
+cv.width=680*dpr;cv.height=440*dpr;ctx.scale(dpr,dpr);
+const W=680,H=440;
+const LE={x:290,y:390},RE={x:390,y:390},eyeR=28;
+const CYC={x:(LE.x+RE.x)/2,y:(LE.y+RE.y)/2};
+let fix={x:340,y:80};
+let lineCenter={x:310,y:220};
+let lineLength=140;
+let dragging=null,hover=null;
+
+const isDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;
+const txtCol=isDark?'#D3D1C7':'#444441';
+const txtSub=isDark?'#B4B2A9':'#888780';
+const bgEye=isDark?'#2C2C2A':'#FFFFFF';
+const eyeStroke=isDark?'#B4B2A9':'#444441';
+const fixCol=isDark?'#AFA9EC':'#7F77DD';
+const fixColD=isDark?'#CECBF6':'#534AB7';
+const fixLine=isDark?'rgba(175,169,236,0.8)':'rgba(127,119,221,0.8)';
+const nearCol=isDark?'#5DCAA5':'#1D9E75';
+const nearColD=isDark?'#9FE1CB':'#0F6E56';
+const nearLine=isDark?'rgba(93,202,165,0.8)':'rgba(29,158,117,0.8)';
+const nearRet=isDark?'#5DCAA5':'#9FE1CB';
+const nearRetS=isDark?'#9FE1CB':'#1D9E75';
+const farCol=isDark?'#85B7EB':'#378ADD';
+const farColD=isDark?'#B5D4F4':'#185FA5';
+const farLine=isDark?'rgba(133,183,235,0.8)':'rgba(55,138,221,0.8)';
+const farRet=isDark?'#85B7EB':'#B5D4F4';
+const farRetS=isDark?'#B5D4F4':'#378ADD';
+
+function circumcircle(p1,p2,p3){
+  const ax=p1.x,ay=p1.y,bx=p2.x,by=p2.y,cx=p3.x,cy=p3.y;
+  const D=2*(ax*(by-cy)+bx*(cy-ay)+cx*(ay-by));
+  if(Math.abs(D)<0.01)return null;
+  const a2=ax*ax+ay*ay,b2=bx*bx+by*by,c2=cx*cx+cy*cy;
+  const ux=(a2*(by-cy)+b2*(cy-ay)+c2*(ay-by))/D;
+  const uy=(a2*(cx-bx)+b2*(ax-cx)+c2*(bx-ax))/D;
+  return{x:ux,y:uy,r:Math.sqrt((ax-ux)**2+(ay-uy)**2)};
+}
+
+function thetaFromUp(eye,pt){return Math.atan2(pt.x-eye.x,eye.y-pt.y);}
+
+function ptOnCircle(cx,cy,r,tx,ty){
+  const a=Math.atan2(ty-cy,tx-cx);
+  return{x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)};
+}
+
+function retinalPos(ex,ey,px,py){
+  const a=Math.atan2(ey-py,ex-px);
+  return{x:ex+eyeR*0.92*Math.cos(a),y:ey+eyeR*0.92*Math.sin(a)};
+}
+
+function getEndpoints(){
+  const dx=lineCenter.x-CYC.x,dy=lineCenter.y-CYC.y;
+  const dist=Math.sqrt(dx*dx+dy*dy);
+  const half=lineLength/2;
+  if(dist<1){
+    return{near:{x:lineCenter.x,y:lineCenter.y+half},far:{x:lineCenter.x,y:lineCenter.y-half}};
+  }
+  const ux=dx/dist,uy=dy/dist;
+  return{
+    far:{x:lineCenter.x+half*ux,y:lineCenter.y+half*uy},
+    near:{x:lineCenter.x-half*ux,y:lineCenter.y-half*uy}
+  };
+}
+
+function drawAngleArc(eye,fixPt,objPt,color,radius){
+  const aFix=Math.atan2(fixPt.y-eye.y,fixPt.x-eye.x);
+  const aObj=Math.atan2(objPt.y-eye.y,objPt.x-eye.x);
+  let diff=aObj-aFix;
+  while(diff>Math.PI)diff-=2*Math.PI;
+  while(diff<-Math.PI)diff+=2*Math.PI;
+  ctx.beginPath();
+  if(diff>0)ctx.arc(eye.x,eye.y,radius,aFix,aFix+diff);
+  else ctx.arc(eye.x,eye.y,radius,aFix+diff,aFix);
+  ctx.strokeStyle=color;ctx.lineWidth=3;ctx.stroke();
+  const mid=aFix+diff/2;
+  const lr=radius+14;
+  let normT=thetaFromUp(eye,objPt)-thetaFromUp(eye,fixPt);
+  while(normT>Math.PI)normT-=2*Math.PI;
+  while(normT<-Math.PI)normT+=2*Math.PI;
+  const deg=normT*180/Math.PI;
+  ctx.font='500 13px sans-serif';ctx.fillStyle=color;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText((deg>=0?'+':'')+deg.toFixed(1)+'°',eye.x+lr*Math.cos(mid),eye.y+lr*Math.sin(mid));
+}
+
+function drawEye(ex,ey,label){
+  const{near,far}=getEndpoints();
+  ctx.beginPath();ctx.arc(ex,ey,eyeR,0,Math.PI*2);
+  ctx.fillStyle=isDark?'rgba(44,44,42,0.6)':'rgba(255,255,255,0.6)';
+  ctx.fill();ctx.strokeStyle=eyeStroke;ctx.lineWidth=2.5;ctx.stroke();
+  ctx.beginPath();ctx.ellipse(ex,ey-eyeR+2,10,6,0,Math.PI,0);
+  ctx.fillStyle=isDark?'rgba(100,130,180,0.25)':'rgba(200,220,255,0.45)';
+  ctx.fill();ctx.strokeStyle=eyeStroke;ctx.lineWidth=1;ctx.stroke();
+
+  const rFix=retinalPos(ex,ey,fix.x,fix.y);
+  const rNear=retinalPos(ex,ey,near.x,near.y);
+  const rFar=retinalPos(ex,ey,far.x,far.y);
+
+  ctx.save();
+  ctx.beginPath();ctx.arc(ex,ey,eyeR-1,0,Math.PI*2);ctx.clip();
+
+  const eFix=ptOnCircle(ex,ey,eyeR,fix.x,fix.y);
+  ctx.beginPath();ctx.moveTo(eFix.x,eFix.y);ctx.lineTo(rFix.x,rFix.y);
+  ctx.strokeStyle=isDark?'#AFA9EC':'#7F77DD';ctx.lineWidth=2.5;ctx.stroke();
+
+  const eNear=ptOnCircle(ex,ey,eyeR,near.x,near.y);
+  ctx.beginPath();ctx.moveTo(eNear.x,eNear.y);ctx.lineTo(rNear.x,rNear.y);
+  ctx.strokeStyle=nearCol;ctx.lineWidth=2.5;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);
+
+  const eFar=ptOnCircle(ex,ey,eyeR,far.x,far.y);
+  ctx.beginPath();ctx.moveTo(eFar.x,eFar.y);ctx.lineTo(rFar.x,rFar.y);
+  ctx.strokeStyle=farCol;ctx.lineWidth=2.5;ctx.setLineDash([3,3]);ctx.stroke();ctx.setLineDash([]);
+
+  ctx.beginPath();ctx.moveTo(rNear.x,rNear.y);ctx.lineTo(rFar.x,rFar.y);
+  ctx.strokeStyle=isDark?'rgba(255,255,255,0.5)':'rgba(0,0,0,0.35)';ctx.lineWidth=3;ctx.setLineDash([]);ctx.stroke();
+
+  ctx.restore();
+
+  ctx.beginPath();ctx.arc(ex,ey,3,0,Math.PI*2);ctx.fillStyle=txtSub;ctx.fill();
+
+  ctx.beginPath();ctx.arc(rFix.x,rFix.y,4.5,0,Math.PI*2);
+  ctx.fillStyle=isDark?'#AFA9EC':'#CECBF6';ctx.fill();
+  ctx.strokeStyle=isDark?'#CECBF6':'#7F77DD';ctx.lineWidth=1.5;ctx.stroke();
+
+  ctx.beginPath();ctx.arc(rNear.x,rNear.y,4.5,0,Math.PI*2);
+  ctx.fillStyle=nearRet;ctx.fill();ctx.strokeStyle=nearRetS;ctx.lineWidth=1.5;ctx.stroke();
+
+  ctx.beginPath();ctx.arc(rFar.x,rFar.y,4.5,0,Math.PI*2);
+  ctx.fillStyle=farRet;ctx.fill();ctx.strokeStyle=farRetS;ctx.lineWidth=1.5;ctx.stroke();
+
+  ctx.font='500 13px sans-serif';ctx.fillStyle=txtCol;
+  ctx.textAlign='center';ctx.fillText(label,ex,ey+eyeR+18);
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  const{near,far}=getEndpoints();
+  const hc=circumcircle(LE,RE,fix);
+  if(hc&&hc.r<3000){
+    ctx.beginPath();ctx.arc(hc.x,hc.y,hc.r,0,Math.PI*2);
+    ctx.setLineDash([6,4]);ctx.strokeStyle=isDark?'rgba(179,178,169,0.35)':'rgba(136,135,128,0.4)';
+    ctx.lineWidth=2.5;ctx.stroke();ctx.setLineDash([]);
+  }
+
+  [LE,RE].forEach(e=>{
+    const p=ptOnCircle(e.x,e.y,eyeR,fix.x,fix.y);
+    ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(fix.x,fix.y);
+    ctx.strokeStyle=fixLine;ctx.lineWidth=2.5;ctx.stroke();
+  });
+  [LE,RE].forEach(e=>{
+    const p=ptOnCircle(e.x,e.y,eyeR,near.x,near.y);
+    ctx.beginPath();ctx.setLineDash([6,4]);ctx.moveTo(p.x,p.y);ctx.lineTo(near.x,near.y);
+    ctx.strokeStyle=nearLine;ctx.lineWidth=2.5;ctx.stroke();ctx.setLineDash([]);
+  });
+  [LE,RE].forEach(e=>{
+    const p=ptOnCircle(e.x,e.y,eyeR,far.x,far.y);
+    ctx.beginPath();ctx.setLineDash([6,4]);ctx.moveTo(p.x,p.y);ctx.lineTo(far.x,far.y);
+    ctx.strokeStyle=farLine;ctx.lineWidth=2.5;ctx.stroke();ctx.setLineDash([]);
+  });
+
+  drawAngleArc(LE,fix,near,nearColD,44);
+  drawAngleArc(RE,fix,near,nearColD,44);
+  drawAngleArc(LE,fix,far,farColD,58);
+  drawAngleArc(RE,fix,far,farColD,58);
+
+  drawEye(LE.x,LE.y,'Left eye');
+  drawEye(RE.x,RE.y,'Right eye');
+
+  ctx.beginPath();ctx.arc(fix.x,fix.y,7,0,Math.PI*2);
+  ctx.fillStyle=dragging==='fix'||hover==='fix'?fixColD:fixCol;
+  ctx.fill();ctx.strokeStyle=bgEye;ctx.lineWidth=2;ctx.stroke();
+  ctx.font='500 13px sans-serif';ctx.fillStyle=fixColD;
+  ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText('Fixation',fix.x,fix.y-12);
+
+  const grad=ctx.createLinearGradient(near.x,near.y,far.x,far.y);
+  grad.addColorStop(0,nearCol);grad.addColorStop(1,farCol);
+  ctx.beginPath();ctx.moveTo(near.x,near.y);ctx.lineTo(far.x,far.y);
+  ctx.strokeStyle=grad;ctx.lineWidth=5;ctx.stroke();
+
+  ctx.beginPath();ctx.arc(near.x,near.y,6,0,Math.PI*2);
+  ctx.fillStyle=nearCol;ctx.fill();ctx.strokeStyle=bgEye;ctx.lineWidth=2;ctx.stroke();
+  ctx.font='500 12px sans-serif';ctx.fillStyle=nearColD;
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  ctx.fillText('Near',near.x-10,near.y);
+
+  ctx.beginPath();ctx.arc(far.x,far.y,6,0,Math.PI*2);
+  ctx.fillStyle=farCol;ctx.fill();ctx.strokeStyle=bgEye;ctx.lineWidth=2;ctx.stroke();
+  ctx.font='500 12px sans-serif';ctx.fillStyle=farColD;
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText('Far',far.x+10,far.y);
+
+  const cSize=5;
+  ctx.beginPath();
+  ctx.moveTo(lineCenter.x-cSize,lineCenter.y);ctx.lineTo(lineCenter.x+cSize,lineCenter.y);
+  ctx.moveTo(lineCenter.x,lineCenter.y-cSize);ctx.lineTo(lineCenter.x,lineCenter.y+cSize);
+  ctx.strokeStyle=isDark?'rgba(255,255,255,0.6)':'rgba(0,0,0,0.4)';ctx.lineWidth=2;ctx.stroke();
+
+  updateInfo();
+}
+
+function fmt(v){return(v>=0?'+':'')+v.toFixed(1)+'°';}
+
+function updateInfo(){
+  const{near,far}=getEndpoints();
+  const tFL=thetaFromUp(LE,fix),tFR=thetaFromUp(RE,fix);
+  function calc(o){
+    let aL=thetaFromUp(LE,o)-tFL;while(aL>Math.PI)aL-=2*Math.PI;while(aL<-Math.PI)aL+=2*Math.PI;
+    let aR=thetaFromUp(RE,o)-tFR;while(aR>Math.PI)aR-=2*Math.PI;while(aR<-Math.PI)aR+=2*Math.PI;
+    return{aL:aL*180/Math.PI,aR:aR*180/Math.PI,d:(aR-aL)*180/Math.PI};
+  }
+  const n=calc(near),f=calc(far);
+  document.getElementById('alN').textContent=fmt(n.aL);
+  document.getElementById('arN').textContent=fmt(n.aR);
+  document.getElementById('dN').textContent=fmt(n.d);
+  document.getElementById('alF').textContent=fmt(f.aL);
+  document.getElementById('arF').textContent=fmt(f.aR);
+  document.getElementById('dF').textContent=fmt(f.d);
+  const ext=f.d-n.d;
+  document.getElementById('de').textContent=fmt(ext);
+
+  const el=document.getElementById('status');
+  if(Math.abs(ext)<0.3){
+    el.textContent='Very small disparity extent';el.style.color=txtCol;
+  }else if(ext>8){
+    el.textContent='Large disparity extent \u2014 strong depth gradient';el.style.color=isDark?'#F0997B':'#993C1D';
+  }else{
+    el.textContent='Disparity extent: '+ext.toFixed(1)+'°';el.style.color=txtCol;
+  }
+}
+
+function getPos(e){
+  const r=cv.getBoundingClientRect();const t=e.touches?e.touches[0]:e;
+  return{x:(t.clientX-r.left)*W/r.width,y:(t.clientY-r.top)*H/r.height};
+}
+function hitTest(p){
+  if(Math.hypot(p.x-fix.x,p.y-fix.y)<18)return'fix';
+  if(Math.hypot(p.x-lineCenter.x,p.y-lineCenter.y)<20)return'line';
+  const{near,far}=getEndpoints();
+  const dx=far.x-near.x,dy=far.y-near.y;
+  const len=Math.sqrt(dx*dx+dy*dy);
+  if(len<1)return null;
+  const t=Math.max(0,Math.min(1,((p.x-near.x)*dx+(p.y-near.y)*dy)/(len*len)));
+  const cx=near.x+t*dx,cy=near.y+t*dy;
+  if(Math.hypot(p.x-cx,p.y-cy)<14)return'line';
+  return null;
+}
+
+cv.addEventListener('pointerdown',e=>{
+  const p=getPos(e);dragging=hitTest(p);
+  if(dragging){cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';}
+});
+cv.addEventListener('pointermove',e=>{
+  const p=getPos(e);
+  if(dragging){
+    const t=dragging==='fix'?fix:lineCenter;
+    t.x=Math.max(40,Math.min(W-40,p.x));t.y=Math.max(30,Math.min(H-80,p.y));
+    draw();
+  }else{hover=hitTest(p);cv.style.cursor=hover?'grab':'default';}
+});
+cv.addEventListener('pointerup',()=>{dragging=null;cv.style.cursor=hover?'grab':'default';});
+
+function setPreset(name){
+  const mid=CYC.x;
+  if(name==='close'){
+    fix.x=mid;fix.y=80;lineCenter.x=mid-20;lineCenter.y=280;lineLength=140;
+  }else if(name==='far'){
+    fix.x=mid;fix.y=80;lineCenter.x=mid-20;lineCenter.y=120;lineLength=140;
+  }else{
+    fix.x=mid;fix.y=160;lineCenter.x=mid-15;lineCenter.y=180;lineLength=200;
+  }
+  document.getElementById('lenSlider').value=lineLength;
+  draw();
+}
+draw();
+</script>
