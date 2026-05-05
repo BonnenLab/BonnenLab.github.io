@@ -1,0 +1,513 @@
+---
+title: "Empirical Horopter (Nonius Method) Demo"
+layout: default
+excerpt: "Interactive demo measuring the empirical horopter using the nonius alignment method, with optional Hering-Hillebrand deviation."
+sitemap: false
+permalink: /demos/horopter-nonius/
+---
+
+<div class="col-sm-12">
+  <p style="margin-bottom: 4px;"><a href="/demos/">&larr; All demos</a></p>
+  <h2>Measuring the empirical horopter (nonius method)</h2>
+  <p>
+    Align two dichoptic nonius line segments at each eccentricity. The top segment is presented to
+    one eye, the bottom to the other. Adjust until the lines appear collinear, then record.
+    Your measurements are plotted against the Vieth-Müller circle (geometric horopter).
+    Toggle the Hering-Hillebrand deviation to see how the empirical horopter flattens.
+  </p>
+
+  <div id="horopter-demo" style="max-width: 900px;">
+
+    <!-- Status text -->
+    <p id="status-text" style="font-size: 13px; color: #888; line-height: 1.6; min-height: 40px;"></p>
+
+    <div class="row" style="margin-bottom: 16px;">
+      <!-- Left: Nonius alignment panel -->
+      <div class="col-sm-6">
+        <h4 style="font-size: 15px;">Nonius alignment</h4>
+        <canvas id="c-nonius" width="720" height="560"
+          tabindex="0"
+          style="width: 360px; height: 280px; background: #0c0c0f; border-radius: 6px; border: 1px solid #333; cursor: crosshair; outline: none;">
+        </canvas>
+
+        <!-- Controls row -->
+        <div id="controls-row" style="display: flex; gap: 8px; margin-top: 10px; justify-content: center; align-items: center;">
+          <button class="btn btn-default btn-sm" id="btn-left">&larr; Left</button>
+          <button class="btn btn-default btn-sm" id="btn-right">Right &rarr;</button>
+          <span style="width: 8px;"></span>
+          <button class="btn btn-success btn-sm" id="btn-record" style="display:none;">Record (1/9)</button>
+          <button class="btn btn-primary btn-sm" id="btn-start">Begin measurement</button>
+          <button class="btn btn-default btn-sm" id="btn-reset" style="display:none;">Reset &amp; repeat</button>
+        </div>
+
+        <!-- Toggle row -->
+        <div style="display: flex; gap: 20px; margin-top: 12px; align-items: center; flex-wrap: wrap; font-size: 13px;">
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+            <input type="checkbox" id="toggle-hh"> H-H deviation
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+            <input type="checkbox" id="toggle-eyes" checked> Left eye on top
+          </label>
+        </div>
+      </div>
+
+      <!-- Right: Horopter plot -->
+      <div class="col-sm-6">
+        <h4 style="font-size: 15px;">Horopter plot (top-down view)</h4>
+        <div style="overflow-x: auto;">
+          <svg id="svg-plot" width="500" height="334" style="display: block;"></svg>
+        </div>
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; margin-top: 4px;">
+          <input type="checkbox" id="toggle-true"> Show true empirical horopter
+        </label>
+      </div>
+    </div>
+
+    <!-- Explanation -->
+    <div class="well" style="font-size: 13px; line-height: 1.6;">
+      <strong>How the nonius method works:</strong>
+      Two thin vertical line segments are presented dichoptically — the top segment to one eye,
+      the bottom to the other. At the fixation point, corresponding retinal points are stimulated
+      and the lines appear collinear. At other eccentricities, the depth at which the lines appear
+      aligned reveals the <em>empirical horopter</em> — the locus of points yielding zero retinal disparity.
+      <br><br>
+      <strong>H-H deviation OFF:</strong> Your simulated visual system has geometrically perfect
+      corresponding points. Good alignment places measurements on the Vieth-Müller circle.
+      <br>
+      <strong style="color: #D85A30;">H-H deviation ON:</strong> The bottom line receives a
+      systematic offset that grows with eccentricity — simulating the Hering-Hillebrand deviation.
+      Even perfect alignment produces a flatter empirical horopter.
+      <br><br>
+      <code>IPD = 63 mm &middot; Viewing distance = 400 mm &middot; H = 0.8 (exaggerated for visibility)</code>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // ── Constants ──
+  var IPD = 63, DIST = 400, H = 0.8, DISPLAY_BIAS_SCALE = 0.4;
+  var ECCS = [-25, -15, -8, -3, 0, 3, 8, 15, 25];
+  var SAMPLES = ECCS.length;
+
+  // ── Math helpers ──
+  function vmcDist(deg) {
+    var t = deg * Math.PI / 180;
+    var yc = (DIST * DIST - IPD * IPD / 4) / (2 * DIST);
+    return yc * Math.cos(t) + Math.sqrt(yc * yc * Math.cos(t) * Math.cos(t) + IPD * IPD / 4);
+  }
+  function empDist(deg) {
+    var tan = Math.tan(deg * Math.PI / 180);
+    return vmcDist(deg) * (1 + H * tan * tan);
+  }
+  function hhBiasMm(deg) { return empDist(deg) - vmcDist(deg); }
+  function toXY(deg, dist) {
+    var t = deg * Math.PI / 180;
+    return { x: dist * Math.sin(t), y: dist * Math.cos(t) };
+  }
+  function randOffset() {
+    return (Math.random() > 0.5 ? 1 : -1) * (8 + Math.random() * 14);
+  }
+
+  // ── Plot geometry (equal scaling: 1 px/mm) ──
+  var plotW = 500, plotH = 280, plotPad = 50;
+  var plotInnerW = plotW - plotPad * 2;
+  var plotInnerH = plotH - plotPad * 2;
+  var xRange = plotInnerW / 2;
+  var yMin = 280, yMax = 280 + plotInnerH;
+
+  function toPlotX(xmm) { return plotPad + plotInnerW / 2 + (xmm / xRange) * (plotInnerW / 2); }
+  function toPlotY(ymm) { return plotPad + plotInnerH - ((ymm - yMin) / (yMax - yMin)) * plotInnerH; }
+
+  // ── Nonius canvas geometry ──
+  var noniusW = 360, noniusH = 280;
+  var fixX = noniusW / 2, fixY = noniusH / 2;
+  var eccScale = 6, lineLen = 30, gap = 6;
+
+  // ── State ──
+  var state = {
+    idx: 0,
+    offset: randOffset(),
+    measurements: new Array(SAMPLES).fill(null),
+    phase: 'intro',    // 'intro' | 'measuring' | 'complete'
+    hhOn: false,
+    leftOnTop: true,
+    showTrue: false
+  };
+
+  // ── DOM refs ──
+  var canvas = document.getElementById('c-nonius');
+  var ctx = canvas.getContext('2d');
+  var svg = document.getElementById('svg-plot');
+  var statusEl = document.getElementById('status-text');
+  var btnStart = document.getElementById('btn-start');
+  var btnRecord = document.getElementById('btn-record');
+  var btnReset = document.getElementById('btn-reset');
+  var btnLeft = document.getElementById('btn-left');
+  var btnRight = document.getElementById('btn-right');
+  var toggleHH = document.getElementById('toggle-hh');
+  var toggleEyes = document.getElementById('toggle-eyes');
+  var toggleTrue = document.getElementById('toggle-true');
+
+  // ── Drawing: Nonius canvas ──
+  function drawNonius() {
+    var dpr = window.devicePixelRatio || 2;
+    canvas.width = noniusW * dpr;
+    canvas.height = noniusH * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, noniusW, noniusH);
+    ctx.fillStyle = '#0c0c0f';
+    ctx.fillRect(0, 0, noniusW, noniusH);
+
+    var currentEcc = ECCS[state.idx];
+
+    // Eccentricity ticks
+    for (var i = 0; i < ECCS.length; i++) {
+      var e = ECCS[i];
+      var tx = fixX + e * eccScale;
+      ctx.strokeStyle = (state.phase === 'measuring' && i === state.idx) ? '#5DCAA5' : '#444';
+      ctx.lineWidth = (state.phase === 'measuring' && i === state.idx) ? 1.5 : 0.5;
+      ctx.beginPath(); ctx.moveTo(tx, noniusH - 22); ctx.lineTo(tx, noniusH - 16); ctx.stroke();
+      if (Math.abs(e) !== 3) {
+        ctx.fillStyle = '#555';
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(e + '°', tx, noniusH - 8);
+      }
+    }
+
+    // Completed dots
+    for (var i = 0; i < SAMPLES; i++) {
+      if (state.measurements[i] !== null && (state.phase !== 'measuring' || i !== state.idx)) {
+        ctx.fillStyle = 'rgba(93,202,165,0.4)';
+        ctx.beginPath();
+        ctx.arc(fixX + ECCS[i] * eccScale, fixY + lineLen + gap + 14, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Fixation cross
+    ctx.strokeStyle = '#5DCB5D';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(fixX, fixY - 8); ctx.lineTo(fixX, fixY + 8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(fixX - 8, fixY); ctx.lineTo(fixX + 8, fixY); ctx.stroke();
+
+    if (state.phase === 'measuring') {
+      var topColor = state.leftOnTop ? '#85B7EB' : '#F0997B';
+      var botColor = state.leftOnTop ? '#F0997B' : '#85B7EB';
+      var topLabel = state.leftOnTop ? 'L' : 'R';
+      var botLabel = state.leftOnTop ? 'R' : 'L';
+
+      var displayBias = state.hhOn ? hhBiasMm(currentEcc) * DISPLAY_BIAS_SCALE : 0;
+      var topX = fixX + currentEcc * eccScale;
+      var botX = topX + state.offset + displayBias;
+
+      // Top line (fixed)
+      ctx.fillStyle = topColor;
+      ctx.fillRect(topX - 1.5, fixY - lineLen - gap / 2, 3, lineLen);
+
+      // Bottom line (adjustable)
+      ctx.fillStyle = botColor;
+      ctx.fillRect(botX - 1.5, fixY + gap / 2, 3, lineLen);
+
+      // Eye labels
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = topColor;
+      ctx.fillText(topLabel, topX + 8, fixY - lineLen - gap / 2 + 12);
+      ctx.fillStyle = botColor;
+      ctx.fillText(botLabel, botX + 8, fixY + gap / 2 + lineLen - 6);
+      ctx.globalAlpha = 1;
+
+      // Offset readout
+      ctx.fillStyle = '#555';
+      ctx.font = '11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('offset: ' + (state.offset > 0 ? '+' : '') + Math.round(state.offset) + ' px', fixX, noniusH - 38);
+    }
+
+    if (state.phase === 'intro') {
+      // "Begin" prompt handled by button visibility
+    }
+
+    if (state.phase === 'complete') {
+      ctx.fillStyle = '#5DCB5D';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('✓ All positions measured', fixX, fixY + 30);
+    }
+  }
+
+  // ── Drawing: SVG plot ──
+  function drawPlot() {
+    var measured = state.measurements.filter(function(m) { return m !== null; }).length;
+    var currentEcc = ECCS[state.idx];
+    var ns = 'http://www.w3.org/2000/svg';
+    svg.innerHTML = '';
+    svg.setAttribute('viewBox', '0 0 ' + plotW + ' ' + (plotH + 54));
+
+    function el(tag, attrs) {
+      var e = document.createElementNS(ns, tag);
+      for (var k in attrs) e.setAttribute(k, attrs[k]);
+      return e;
+    }
+
+    // Axes
+    svg.appendChild(el('line', { x1: plotPad, y1: plotPad - 6, x2: plotPad, y2: plotH - plotPad + 6, stroke: '#aaa', 'stroke-width': 0.5 }));
+    svg.appendChild(el('line', { x1: plotPad - 6, y1: plotH - plotPad, x2: plotW - plotPad + 6, y2: plotH - plotPad, stroke: '#aaa', 'stroke-width': 0.5 }));
+
+    // Axis labels
+    var xlbl = el('text', { x: plotW / 2, y: plotH - plotPad + 34, 'text-anchor': 'middle', 'font-size': 11, fill: '#888', 'font-family': 'sans-serif' });
+    xlbl.textContent = 'Lateral position (mm)';
+    svg.appendChild(xlbl);
+
+    var ylbl = el('text', { x: 16, y: plotH / 2 - 6, 'text-anchor': 'middle', 'font-size': 11, fill: '#888', 'font-family': 'sans-serif', transform: 'rotate(-90, 16, ' + (plotH / 2 - 6) + ')' });
+    ylbl.textContent = 'Distance from eyes (mm)';
+    svg.appendChild(ylbl);
+
+    // X ticks
+    [-200, -100, 0, 100, 200].forEach(function(v) {
+      var px = toPlotX(v);
+      if (px < plotPad - 2 || px > plotW - plotPad + 2) return;
+      svg.appendChild(el('line', { x1: px, y1: plotH - plotPad, x2: px, y2: plotH - plotPad + 5, stroke: '#aaa', 'stroke-width': 0.5 }));
+      var t = el('text', { x: px, y: plotH - plotPad + 16, 'text-anchor': 'middle', 'font-size': 10, fill: '#aaa', 'font-family': 'sans-serif' });
+      t.textContent = v;
+      svg.appendChild(t);
+    });
+
+    // Y ticks
+    [300, 340, 380, 400, 420, 460].forEach(function(d) {
+      if (d < yMin || d > yMax) return;
+      svg.appendChild(el('line', { x1: plotPad - 4, y1: toPlotY(d), x2: plotPad, y2: toPlotY(d), stroke: '#aaa', 'stroke-width': 0.5 }));
+      var t = el('text', { x: plotPad - 8, y: toPlotY(d) + 3, 'text-anchor': 'end', 'font-size': 10, fill: '#aaa', 'font-family': 'sans-serif' });
+      t.textContent = d;
+      svg.appendChild(t);
+    });
+
+    // Frontoparallel reference
+    svg.appendChild(el('line', { x1: plotPad, y1: toPlotY(DIST), x2: plotW - plotPad, y2: toPlotY(DIST), stroke: '#aaa', 'stroke-width': 0.5, 'stroke-dasharray': '1 4', opacity: 0.3 }));
+
+    // VMC arc
+    var vmcPts = [];
+    var empPts = [];
+    for (var d = -27; d <= 27; d += 0.3) {
+      var vp = toXY(d, vmcDist(d));
+      var ep = toXY(d, empDist(d));
+      vmcPts.push(toPlotX(vp.x).toFixed(1) + ',' + toPlotY(vp.y).toFixed(1));
+      empPts.push(toPlotX(ep.x).toFixed(1) + ',' + toPlotY(ep.y).toFixed(1));
+    }
+    svg.appendChild(el('polyline', { points: vmcPts.join(' '), fill: 'none', stroke: '#5B9BD5', 'stroke-width': 2, 'stroke-dasharray': '6 4', opacity: 0.9 }));
+
+    // True empirical horopter
+    if (state.showTrue) {
+      svg.appendChild(el('polyline', { points: empPts.join(' '), fill: 'none', stroke: '#5DCAA5', 'stroke-width': 2, opacity: 0.7 }));
+    }
+
+    // Recorded measurements
+    for (var i = 0; i < SAMPLES; i++) {
+      if (state.measurements[i] === null) continue;
+      var deg = ECCS[i];
+      var mDist = vmcDist(deg) + state.measurements[i];
+      var p = toXY(deg, mDist);
+      svg.appendChild(el('circle', { cx: toPlotX(p.x), cy: toPlotY(p.y), r: 5, fill: '#5DCAA5', stroke: '#fff', 'stroke-width': 1.5, opacity: 0.9 }));
+    }
+
+    // Live measurement indicator
+    if (state.phase === 'measuring') {
+      var bias = state.hhOn ? hhBiasMm(currentEcc) : 0;
+      var noise = state.offset * 0.1;
+      var liveD = vmcDist(currentEcc) + bias + noise;
+      var lp = toXY(currentEcc, liveD);
+      var lpx = toPlotX(lp.x), lpy = toPlotY(lp.y);
+
+      svg.appendChild(el('line', { x1: lpx, y1: lpy - 14, x2: lpx, y2: lpy + 14, stroke: '#F0997B', 'stroke-width': 0.8, opacity: 0.5 }));
+      svg.appendChild(el('line', { x1: lpx - 14, y1: lpy, x2: lpx + 14, y2: lpy, stroke: '#F0997B', 'stroke-width': 0.8, opacity: 0.5 }));
+
+      var pulse = el('circle', { cx: lpx, cy: lpy, r: 7, fill: 'none', stroke: '#F0997B', 'stroke-width': 1, opacity: 0.4 });
+      var animR = el('animate', { attributeName: 'r', values: '7;10;7', dur: '1.5s', repeatCount: 'indefinite' });
+      var animO = el('animate', { attributeName: 'opacity', values: '0.4;0.15;0.4', dur: '1.5s', repeatCount: 'indefinite' });
+      pulse.appendChild(animR);
+      pulse.appendChild(animO);
+      svg.appendChild(pulse);
+
+      svg.appendChild(el('circle', { cx: lpx, cy: lpy, r: 4, fill: '#F0997B', stroke: '#fff', 'stroke-width': 1 }));
+
+      var lt = el('text', { x: lpx + 12, y: lpy - 10, 'font-size': 10, fill: '#F0997B', 'font-family': 'sans-serif', opacity: 0.8 });
+      lt.textContent = currentEcc + '°';
+      svg.appendChild(lt);
+    }
+
+    // Fixation point
+    svg.appendChild(el('circle', { cx: toPlotX(0), cy: toPlotY(DIST), r: 4, fill: '#5DCB5D', opacity: 0.8 }));
+
+    // Eyes
+    var eyeY = plotH - plotPad + 44;
+    svg.appendChild(el('circle', { cx: toPlotX(-IPD / 2), cy: eyeY, r: 5, fill: 'none', stroke: '#888', 'stroke-width': 1 }));
+    svg.appendChild(el('circle', { cx: toPlotX(IPD / 2), cy: eyeY, r: 5, fill: 'none', stroke: '#888', 'stroke-width': 1 }));
+    svg.appendChild(el('circle', { cx: toPlotX(-IPD / 2), cy: eyeY, r: 2, fill: '#888' }));
+    svg.appendChild(el('circle', { cx: toPlotX(IPD / 2), cy: eyeY, r: 2, fill: '#888' }));
+    var le = el('text', { x: toPlotX(-IPD / 2), y: eyeY + 14, 'text-anchor': 'middle', 'font-size': 9, fill: '#aaa', 'font-family': 'sans-serif' });
+    le.textContent = 'LE';
+    svg.appendChild(le);
+    var re = el('text', { x: toPlotX(IPD / 2), y: eyeY + 14, 'text-anchor': 'middle', 'font-size': 9, fill: '#aaa', 'font-family': 'sans-serif' });
+    re.textContent = 'RE';
+    svg.appendChild(re);
+
+    // Legend
+    var ly = plotPad;
+    svg.appendChild(el('line', { x1: plotPad + 4, y1: ly, x2: plotPad + 22, y2: ly, stroke: '#5B9BD5', 'stroke-width': 2, 'stroke-dasharray': '6 4', opacity: 0.9 }));
+    var l1 = el('text', { x: plotPad + 28, y: ly + 4, 'font-size': 10, fill: '#888', 'font-family': 'sans-serif' });
+    l1.textContent = 'Vieth-Müller circle';
+    svg.appendChild(l1);
+
+    var nextLy = ly + 18;
+    if (state.showTrue) {
+      svg.appendChild(el('line', { x1: plotPad + 4, y1: nextLy, x2: plotPad + 22, y2: nextLy, stroke: '#5DCAA5', 'stroke-width': 2, opacity: 0.7 }));
+      var l2 = el('text', { x: plotPad + 28, y: nextLy + 4, 'font-size': 10, fill: '#888', 'font-family': 'sans-serif' });
+      l2.textContent = 'Empirical horopter';
+      svg.appendChild(l2);
+      nextLy += 18;
+    }
+    if (measured > 0) {
+      svg.appendChild(el('circle', { cx: plotPad + 13, cy: nextLy, r: 4, fill: '#5DCAA5' }));
+      var l3 = el('text', { x: plotPad + 28, y: nextLy + 4, 'font-size': 10, fill: '#888', 'font-family': 'sans-serif' });
+      l3.textContent = 'Your measurements';
+      svg.appendChild(l3);
+      nextLy += 18;
+    }
+    if (state.phase === 'measuring') {
+      svg.appendChild(el('circle', { cx: plotPad + 13, cy: nextLy, r: 4, fill: '#F0997B' }));
+      var l4 = el('text', { x: plotPad + 28, y: nextLy + 4, 'font-size': 10, fill: '#F0997B', 'font-family': 'sans-serif' });
+      l4.textContent = 'Current alignment';
+      svg.appendChild(l4);
+    }
+
+    // H-H badge
+    if (state.hhOn) {
+      svg.appendChild(el('rect', { x: plotW - plotPad - 78, y: plotH - plotPad - 24, width: 78, height: 20, rx: 4, fill: 'rgba(240,153,123,0.12)', stroke: 'rgba(240,153,123,0.3)', 'stroke-width': 0.5 }));
+      var hht = el('text', { x: plotW - plotPad - 39, y: plotH - plotPad - 11, 'text-anchor': 'middle', 'font-size': 10, fill: '#F0997B', 'font-family': 'sans-serif' });
+      hht.textContent = 'H-H active';
+      svg.appendChild(hht);
+    }
+  }
+
+  // ── Status text ──
+  function updateStatus() {
+    var measured = state.measurements.filter(function(m) { return m !== null; }).length;
+    var currentEcc = ECCS[state.idx];
+    var topLabel = state.leftOnTop ? 'L' : 'R';
+    var botLabel = state.leftOnTop ? 'R' : 'L';
+
+    if (state.phase === 'intro') {
+      statusEl.innerHTML = 'Align the two nonius line segments at each eccentricity. The top segment (' +
+        topLabel + ' eye) and bottom segment (' + botLabel + ' eye) should appear collinear. ' +
+        'Use <kbd>←</kbd> <kbd>→</kbd> arrow keys to adjust, then press <kbd>Enter</kbd> to record.';
+    } else if (state.phase === 'measuring') {
+      var extra = state.hhOn ? ' <span style="color:#D85A30;">H-H deviation active — notice the increasing misalignment in the periphery.</span>' : '';
+      statusEl.innerHTML = 'Testing <strong>' + currentEcc + '°</strong> eccentricity — ' +
+        (SAMPLES - measured) + ' remaining.' + extra;
+    } else {
+      statusEl.innerHTML = state.hhOn
+        ? 'All measurements recorded. With the H-H deviation active, your data should fall on the flatter empirical horopter (green) rather than the VMC (blue dashed).'
+        : 'All measurements recorded. Without the H-H deviation, your data should cluster near the Vieth-Müller circle (blue dashed). Try again with the deviation turned on to compare.';
+    }
+  }
+
+  // ── Button visibility ──
+  function updateButtons() {
+    btnStart.style.display = state.phase === 'intro' ? '' : 'none';
+    btnRecord.style.display = state.phase === 'measuring' ? '' : 'none';
+    btnReset.style.display = state.phase === 'complete' ? '' : 'none';
+    btnLeft.style.display = state.phase === 'measuring' ? '' : 'none';
+    btnRight.style.display = state.phase === 'measuring' ? '' : 'none';
+
+    var measured = state.measurements.filter(function(m) { return m !== null; }).length;
+    btnRecord.textContent = 'Record (' + (measured + 1) + '/' + SAMPLES + ')';
+  }
+
+  // ── Full redraw ──
+  function draw() {
+    drawNonius();
+    drawPlot();
+    updateStatus();
+    updateButtons();
+  }
+
+  // ── Actions ──
+  function doRecord() {
+    if (state.phase !== 'measuring') return;
+    var bias = state.hhOn ? hhBiasMm(ECCS[state.idx]) : 0;
+    var noise = state.offset * 0.1;
+    state.measurements[state.idx] = bias + noise;
+    var nextNull = -1;
+    for (var i = 0; i < SAMPLES; i++) {
+      if (state.measurements[i] === null) { nextNull = i; break; }
+    }
+    if (nextNull !== -1) {
+      state.idx = nextNull;
+      state.offset = randOffset();
+    } else {
+      state.phase = 'complete';
+      state.showTrue = true;
+      toggleTrue.checked = true;
+    }
+    draw();
+  }
+
+  function resetState() {
+    state.measurements = new Array(SAMPLES).fill(null);
+    state.idx = 0;
+    state.offset = randOffset();
+    state.showTrue = false;
+    toggleTrue.checked = false;
+    if (state.phase !== 'intro') state.phase = 'measuring';
+    draw();
+  }
+
+  // ── Event listeners ──
+  btnStart.addEventListener('click', function() {
+    state.phase = 'measuring';
+    state.offset = randOffset();
+    draw();
+    canvas.focus();
+  });
+
+  btnRecord.addEventListener('click', doRecord);
+  btnReset.addEventListener('click', resetState);
+
+  btnLeft.addEventListener('click', function() {
+    state.offset = Math.max(state.offset - 1, -50);
+    draw();
+  });
+  btnRight.addEventListener('click', function() {
+    state.offset = Math.min(state.offset + 1, 50);
+    draw();
+  });
+
+  toggleHH.addEventListener('change', function() {
+    state.hhOn = this.checked;
+    resetState();
+  });
+
+  toggleEyes.addEventListener('change', function() {
+    state.leftOnTop = this.checked;
+    draw();
+  });
+
+  toggleTrue.addEventListener('change', function() {
+    state.showTrue = this.checked;
+    draw();
+  });
+
+  canvas.addEventListener('keydown', function(e) {
+    if (state.phase !== 'measuring') return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); state.offset = Math.max(state.offset - 1, -50); draw(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); state.offset = Math.min(state.offset + 1, 50); draw(); }
+    if (e.key === 'Enter') { e.preventDefault(); doRecord(); }
+  });
+
+  // ── Init ──
+  draw();
+})();
+</script>
