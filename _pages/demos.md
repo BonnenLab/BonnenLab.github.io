@@ -39,7 +39,14 @@ A demo to explore how to measure relative binocular disparity of two objects.
 <div class="well" style="min-height: 120px;">
 <h4><a href="/demos/disparity-extent/">Measuring Relative Disparity of an object extent</a></h4>
 <p style="font-size: 14px;">
-A demo to explore how to measure relateve binocular disparity of an object's extent.
+A demo to explore how to measure relative binocular disparity of an object's extent.
+</p>
+</div>
+
+<div class="well" style="min-height: 120px;">
+<h4><a href="/demos/empirical-horopter/">Measuring the empirical horopter</a></h4>
+<p style="font-size: 14px;">
+A demo to explore how to measure the empirical horopter.
 </p>
 </div>
 
